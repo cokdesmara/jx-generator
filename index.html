@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JX Meal Checklist Generator</title>
+<link rel="icon" href="assets/img/favicon.ico" type="image/x-icon">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: #fff; border-radius: 16px; padding: 32px;
+    width: 100%; max-width: 520px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    position: relative;
+  }
+  .logo-top { text-align: center; margin-bottom: 12px; }
+  .logo-top img { height: 56px; width: auto; }
+  h1 { font-size: 22px; color: #1a3a4a; margin-bottom: 4px; text-align: center; }
+  .sub { color: #6b7c85; font-size: 13px; margin-bottom: 24px; text-align: center; }
+  label { display: block; font-size: 13px; font-weight: 600; color: #34495e; margin: 16px 0 6px; }
+  .file-drop {
+    border: 2px dashed #b8c9d0; border-radius: 10px; padding: 20px;
+    text-align: center; cursor: pointer; transition: all .2s;
+    background: #f8fbfc; font-size: 13px; color: #6b7c85;
+  }
+  .file-drop:hover, .file-drop.drag { border-color: #2c5364; background: #eef6f8; }
+  .file-drop.filled { border-color: #27ae60; background: #eafaf1; color: #1e8449; }
+  select, button { width: 100%; padding: 11px; border-radius: 8px; font-size: 14px; border: 1px solid #cdd9df; }
+  select { background: #fff; }
+  select:disabled { background: #f0f3f4; color: #999; }
+  button {
+    margin-top: 24px; background: linear-gradient(135deg, #203a43, #2c5364);
+    color: #fff; border: none; font-weight: 600; cursor: pointer; transition: opacity .2s;
+  }
+  button:hover:not(:disabled) { opacity: .9; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .msg { margin-top: 16px; font-size: 13px; padding: 12px; border-radius: 8px; display: none; }
+  .msg.err { display: block; background: #fdecea; color: #c0392b; }
+  .msg.ok  { display: block; background: #eafaf1; color: #1e8449; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff;
+          border-top-color: transparent; border-radius: 50%; animation: sp .7s linear infinite;
+          vertical-align: -2px; margin-right: 6px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .progress-bar { width: 100%; height: 8px; background: #e0e6ea; border-radius: 4px; overflow: hidden; margin-top: 12px; display: none; }
+  .progress-bar .fill { height: 100%; background: linear-gradient(90deg, #203a43, #2c5364); width: 0%; transition: width 0.3s ease; }
+  .progress-bar .text { text-align: center; font-size: 12px; color: #6b7c85; margin-top: 4px; display: block; }
+  .footer-brand { text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8ebef; }
+  .brand-logo { height: 48px; width: auto; opacity: 0.8; }
+  .copyright { margin-top: 12px; font-size: 12px; color: #95a5a6; }
+  .copyright a { color: #2c5364; text-decoration: none; font-weight: 500; }
+  .copyright a:hover { text-decoration: underline; }
+  .help-btn {
+    position: absolute; top: 16px; right: 16px; z-index: 10;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #2c5364; border: none; cursor: pointer;
+    font-size: 16px; font-weight: 700; color: #fff;
+    transition: all .2s; display: flex; align-items: center; justify-content: center;
+  }
+  .help-btn:hover { background: #1a3a4a; transform: scale(1.1); }
+  /* ---- Modal overlay with fade animation ---- */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.28s ease, visibility 0.28s ease;
+}
+.modal-overlay.show {
+  display: flex !important;
+  pointer-events: auto;
+  visibility: visible;
+  opacity: 1;
+}
+
+/* ---- Modal card with slide-up entrance ---- */
+.modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 88vh;
+  overflow: hidden; /* header/footer fixed, body scrolls */
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+  opacity: 0;
+  transform: translateY(24px) scale(0.96);
+  transition: opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(0,0,0,0.06);
+  backdrop-filter: blur(2px);
+}
+.modal-overlay.show .modal {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* ---- Modal header ---- */
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e8ebef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.modal-header h2 {
+  font-size: 18px;
+  color: #1a3a4a;
+  margin: 0;
+}
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #6b7c85;
+  line-height: 1;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.modal-close:hover {
+  color: #c0392b;
+  background: #f3f4f6;
+}
+
+/* ---- Modal body ---- */
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modal-body h3 {
+  font-size: 14px;
+  color: #2c5364;
+  margin: 18px 0 8px;
+}
+.modal-body h3:first-child {
+  margin-top: 0;
+}
+.modal-body p, .modal-body li {
+  font-size: 13px;
+  color: #34495e;
+  line-height: 1.7;
+}
+.modal-body ol, .modal-body ul {
+  padding-left: 22px;
+}
+.modal-body li {
+  margin-bottom: 6px;
+}
+
+/* ---- Modal footer ---- */
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e8ebef;
+  text-align: right;
+  flex-shrink: 0;
+}
+.modal-footer button {
+  width: auto;
+  padding: 10px 24px;
+  margin-top: 0;
+}
+
+/* ---- Custom scrollbar for modal body ---- */
+.modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+.modal-body::-webkit-scrollbar-track {
+  background: #f3f6f8;
+  border-radius: 6px;
+  margin: 4px 0;
+  border: 1px solid #e8ebef;
+}
+.modal-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #9fb3c2, #7a91a3);
+  border-radius: 6px;
+  border: 2px solid #f3f6f8;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #7a91a3, #5b7386);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+}
+.modal-body::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, #5b7386, #455a6b);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* ---- Nice scrollbar for whole page ---- */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #f3f6f8;
+  border-radius: 6px;
+  margin: 2px 0;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #9fb3c2, #7a91a3);
+  border-radius: 6px;
+  border: 3px solid #f3f6f8;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #7a91a3, #5b7386);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
+::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, #5b7386, #455a6b);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+/* Firefox scrollbar support */
+.modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: #7a91a3 #f3f6f8;
+  scrollbar-gutter: stable;
+}
+
+/* Smooth scroll for page anchors */
+html {
+  scroll-behavior: smooth;
+}
+
+  .guide-link { display: block; text-align: center; margin-top: 12px; font-size: 13px; color: #2c5364; cursor: pointer; text-decoration: underline; }
+  .guide-link:hover { color: #1a3a4a; }
+</style>
+</head>
+<body>
+<div class="card">
+  <button class="help-btn" id="helpBtn" title="Panduan Penggunaan">?</button>
+  <div class="logo-top">
+    <img src="assets/img/aerofood.png" alt="Aerofood" class="brand-logo">
+  </div>
+  <h1>JX Meal Checklist Generator</h1>
+  <div class="sub">Upload file acuan Meal Charge &rarr; pilih tanggal &rarr; download checklist.</div>
+
+  <label>File Acuan (Meal Charge .xlsx)</label>
+  <div class="file-drop" id="drop">Klik atau seret file ke sini<br><span id="fname">Belum ada file</span></div>
+  <input type="file" id="file" accept=".xlsx" style="display:none">
+
+  <label>Tanggal Penerbangan</label>
+  <select id="date" disabled><option>-- upload file dulu --</option></select>
+
+  <button id="go" disabled>Generate & Download</button>
+  <div class="msg" id="msg"></div>
+  <div class="progress-bar" id="progress">
+    <div class="fill" id="progressFill"></div>
+    <span class="text" id="progressText"></span>
+  </div>
+  <a class="guide-link" id="guideLink">Panduan Penggunaan</a>
+  <div class="footer-brand">
+    <div class="copyright">&copy; 2026 JXG Online. All Rights Reserved. Created by <a href="https://smarawebdev.my.id" target="_blank" rel="noopener">Cokorda Smara</a></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Panduan Penggunaan</h2>
+      <button class="modal-close" id="modalCloseBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <h3>1. Alat ini untuk apa?</h3>
+      <p>Membuat file Meal Number Check List yang sudah terisi otomatis dari file Meal Charge. Tidak perlu menyalin angka satu per satu.</p>
+      <h3>2. Yang perlu disiapkan</h3>
+      <ul>
+        <li>Browser modern (Chrome, Edge, Firefox, Safari).</li>
+        <li>File acuan Meal Charge (.xlsx) - boleh tetap terbuka saat generate.</li>
+        <li>File acuan tidak akan diubah oleh alat ini.</li>
+      </ul>
+      <h3>3. Cara memakai (3 langkah)</h3>
+      <ol>
+        <li>Klik area upload atau seret file acuan ke sini. Pilih file Meal Charge (.xlsx).</li>
+        <li>Pilih tanggal penerbangan dari dropdown (tanggal bertuliskan "(kosong)" artinya belum ada datanya).</li>
+        <li>Klik <strong>Generate & Download</strong> lalu simpan file hasilnya.</li>
+      </ol>
+      <h3>4. Nama file hasil</h3>
+      <p><strong>v2 Meal Number Check List JX 2026D - [tanggal terbang] - [waktu bikin].xlsx</strong></p>
+      <p>Karena ada waktu pembuatannya, file lama tidak akan tertimpa. Lokasi simpan bebas diubah saat download.</p>
+      <h3>5. Isi file hasil</h3>
+      <ul>
+        <li>Tanggal, jumlah penumpang (J/Y), dan jumlah kru (FC/CC) terisi otomatis.</li>
+        <li>Jumlah tiap menu (kolom NRML dan IEML) terisi otomatis dari file acuan.</li>
+        <li>Rincian makanan khusus (SPML) ditulis di bagian kru (JC/FC/CC/YC).</li>
+        <li>Kolom TOTAL menghitung sendiri (rumus), warna dan bentuk tabel tidak berubah.</li>
+        <li>Kotak yang memang tidak ada datanya dibiarkan kosong - itu normal.</li>
+      </ul>
+      <h3>6. Kalau ada masalah</h3>
+      <ul>
+        <li><strong>Memindai tanggal lama:</strong> NORMAL, file acuan besar (±1MB) butuh beberapa detik untuk dibaca.</li>
+        <li><strong>Tanggal kosong (hanya ada tanggal):</strong> tanggal itu memang belum ada datanya di file acuan - pilih tanggal lain.</li>
+        <li><strong>File gagal dibaca:</strong> pastikan file acuan valid (format .xlsx) dan tidak sedang dibuka di aplikasi lain.</li>
+        <li><strong>Hasil tidak cocok:</strong> pastikan file acuan adalah Meal Charge yang benar.</li>
+      </ul>
+      <h3>7. Yang tidak boleh dilakukan</h3>
+      <ul>
+        <li>Jangan menutup file acuan selama proses generate berlangsung.</li>
+        <li>Jangan rubah nama atau pindah sheet di file acuan saat generate.</li>
+      </ul>
+    </div>
+    <div class="modal-footer">
+      <button id="modalCloseBtn2">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const fname = document.getElementById('fname');
+const dateSel = document.getElementById('date');
+const go = document.getElementById('go');
+const msg = document.getElementById('msg');
+const progress = document.getElementById('progress');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+const helpBtn = document.getElementById('helpBtn');
+const guideLink = document.getElementById('guideLink');
+const modalOverlay = document.getElementById('modalOverlay');
+const modalCloseBtn = document.getElementById('modalCloseBtn');
+const modalCloseBtn2 = document.getElementById('modalCloseBtn2');
+let chosenFile = null;
+let progressInterval = null;
+
+function showMsg(text, type) {
+  msg.textContent = text;
+  msg.className = 'msg ' + (type || 'err');
+  if (!text) msg.className = 'msg';
+}
+
+function showProgress(label, pct) {
+  progress.style.display = 'block';
+  progressFill.style.width = pct + '%';
+  progressText.textContent = label + ' ' + Math.round(pct) + '%';
+}
+
+function hideProgress() {
+  progress.style.display = 'none';
+  progressFill.style.width = '0%';
+  progressText.textContent = '';
+  if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
+}
+
+function simulateProgress(label, duration, callback) {
+  let elapsed = 0;
+  const step = 100;
+  progressInterval = setInterval(() => {
+    elapsed += step;
+    const pct = Math.min(90, (elapsed / duration) * 100);
+    showProgress(label, pct);
+    if (elapsed >= duration) { clearInterval(progressInterval); progressInterval = null; }
+  }, step);
+  setTimeout(() => { if (callback) callback(); }, duration);
+}
+
+function openModal() {
+  modalOverlay.style.display = 'flex';
+  // force reflow so transition kicks in
+  void modalOverlay.offsetWidth;
+  modalOverlay.style.pointerEvents = 'auto';
+  modalOverlay.style.visibility = 'visible';
+  modalOverlay.style.opacity = '1';
+  modalOverlay.classList.add('show');
+}
+function closeModal() {
+  modalOverlay.style.pointerEvents = 'none';
+  modalOverlay.style.opacity = '0';
+  modalOverlay.classList.remove('show');
+  // wait for fade-out before removing from layout
+  setTimeout(() => {
+    modalOverlay.style.visibility = 'hidden';
+    modalOverlay.style.display = 'none';
+  }, 280);
+}
+helpBtn.addEventListener('click', openModal);
+guideLink.addEventListener('click', openModal);
+modalCloseBtn.addEventListener('click', closeModal);
+modalCloseBtn2.addEventListener('click', closeModal);
+modalOverlay.addEventListener('click', (e) => {
+  if (e.target === modalOverlay) { /* do nothing - only X/Close button */ }
+});
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(f) {
+  if (!/\.xlsx$/i.test(f.name)) { showMsg('File harus .xlsx'); return; }
+  if (f.size > 4 * 1024 * 1024) { showMsg('File terlalu besar (maks 4MB)'); return; }
+  chosenFile = f;
+  fname.textContent = f.name;
+  drop.classList.add('filled');
+  showMsg('');
+  detectDates();
+}
+
+async function detectDates() {
+  dateSel.disabled = true; go.disabled = true;
+  dateSel.innerHTML = '<option>Memindai tanggal...</option>';
+  showProgress('Memindai file...', 10);
+  const fd = new FormData();
+  fd.append('acuan', chosenFile);
+  try {
+    simulateProgress('Memindai tanggal...', 3000);
+    const res = await fetch('api/detect.php', { method: 'POST', body: fd });
+    clearInterval(progressInterval);
+    progressInterval = null;
+    showProgress('Selesai', 100);
+    setTimeout(hideProgress, 500);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    dateSel.innerHTML = '';
+    data.dates.forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.date;
+      const dt = new Date(d.date + 'T00:00:00');
+      const txt = dt.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      o.textContent = txt + (d.has ? '' : '  (kosong)');
+      dateSel.appendChild(o);
+    });
+    dateSel.disabled = false; go.disabled = false;
+  } catch (e) {
+    clearInterval(progressInterval);
+    progressInterval = null;
+    hideProgress();
+    dateSel.innerHTML = '<option>-- gagal --</option>';
+    showMsg('Gagal membaca tanggal: ' + e.message);
+  }
+}
+
+go.addEventListener('click', async () => {
+  if (!chosenFile || !dateSel.value) return;
+  go.disabled = true;
+  go.innerHTML = '<span class="spin"></span>Memproses...';
+  showMsg('');
+  showProgress('Mengirim file...', 10);
+  const fd = new FormData();
+  fd.append('acuan', chosenFile);
+  fd.append('date', dateSel.value);
+  try {
+    simulateProgress('Memproses data...', 5000);
+    const res = await fetch('api/generate.php', { method: 'POST', body: fd });
+    clearInterval(progressInterval);
+    progressInterval = null;
+    showProgress('Menyiapkan download...', 100);
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const data = await res.json();
+      hideProgress();
+      throw new Error(data.error || 'Gagal generate');
+    }
+    if (!res.ok) { hideProgress(); throw new Error('HTTP ' + res.status); }
+    const blob = await res.blob();
+    setTimeout(hideProgress, 300);
+    const cd = res.headers.get('content-disposition') || '';
+    const m = cd.match(/filename="?(.+?)"?;?$/);
+    const name = m ? m[1] : 'checklist.xlsx';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    showMsg('Berhasil: ' + name, 'ok');
+  } catch (e) {
+    clearInterval(progressInterval);
+    progressInterval = null;
+    hideProgress();
+    showMsg('Gagal: ' + e.message);
+  } finally {
+    go.disabled = false;
+    go.innerHTML = 'Generate & Download';
+  }
+});
+</script>
+</body>
+</html>

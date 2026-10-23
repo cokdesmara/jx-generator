@@ -1,0 +1,1 @@
+{ "name": "jx/jxgenerator", "description": "Web generator for JX Meal Number Check List", "type": "project", "require": { "php": ">=8.0", "phpoffice/phpspreadsheet": "^2.0" } }
